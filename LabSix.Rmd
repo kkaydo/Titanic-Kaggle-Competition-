@@ -1,0 +1,190 @@
+---
+title: "STAT 341/641 Lab: Week Six"
+author: "Xueqi Du"
+date: "3/6/2020"
+output: html_document
+---
+---
+
+**STAT 341/641:**        Intro to EDA and Statistical Computing  
+**Lab #5:**              Rejection Sampling and the Bootstrap  
+**Teaching Assistant:**  "Yanjun Liu"
+
+* * *
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Directions:**  You will use the lab time to complete this assignment.
+
+* * *
+
+#**Task: Practice rejection sampling and the bootstrap**  
+
+
+##1: Suppose we would like to obtain samples from a probability density that satisfies
+$$f(x) \propto \exp\left\{-x^2/2 \right\}(\sin(6x)^2 + 3\cos(x)^2).$$
+The symbol $\propto$ indicates that the density is proportional to $\exp\left\{-x^2/2 \right\}(\sin(6x)^2 + 3\cos(x)^2)$.  In general, two quantities $a$ and $b$ are proportional if $a = kb$ where $k$ is called the constant of proportionality.  For probability distributions, we frequently know the numerator, but not the denominator.  
+
+Anyway, find a number $M \geq 1$ such that the envelope condition holds for proposal distribution $g(x) = N(0,1).$  Recall the envelope condition is $f(x) \leq M g(x)$ for all $x$.  
+
+As a hint, look at the code chunk below.  Try looping over values for $M$.  Choose the smallest value of $M$ that satisfies the condition. 
+
+
+**Solution:**
+```{r}
+#myseq <- seq(from = -4, to = 4, by = .1)
+#f <- function(x){
+#  exp(-x^2/2)*(sin(6*x)^2 + 3*cos(x)^2)
+#}
+#M <- 10
+#all(f(myseq) < M * dnorm(myseq))
+myseq <- seq(from = -4, to = 4, by = .1)
+R=length(myseq)
+M=numeric(R)
+
+f <- function(x){
+  exp( -x^2/2)*(sin(6*x)^2 + 3*cos(x)^2)
+}
+
+for( i in 1:R){
+if (f(myseq)[i] > dnorm(myseq)[i]){
+  M[i] = f(myseq)[i]/dnorm(myseq)[i]
+  
+}
+else{
+  M[i] = 1 
+}
+}
+print(max(M))
+#the minimum M is 10
+
+```
+##2: Write a loop to obtain 1,000 samples from $f(\cdot)$.  How many iterations does it take to get 1,000 samples?  
+Edit the code chunk supplied below to accomplish this. $f(\cdot)$
+
+**Solution:**  
+```{r}
+#mynum <- 0
+#N <- 1000
+#fsamples <- NULL
+#M <- 
+#while(mynum < N){
+  ## sample from the proposal
+#  mysamp <- rnorm(1)
+  
+  ## compute r
+#  myr = (M * f(mysamp))/(dnorm(mysamp)) 
+
+  
+#  if(sample(c(0,1),1,prob = c(1-myr,myr)) == 1){
+    ## record the sample
+#    fsamples <- c(fsamples, mysamp)
+#    mynum <- mynum + 1
+#  }
+#}
+
+mycount <-0
+mynum <- 0
+N <- 1000
+fsamples <- NULL
+M <- 10
+while(mynum < N){
+   mysamp <- rnorm(1)
+   myr = (f(mysamp))/(M * dnorm(mysamp)) 
+
+if(sample(c(0,1),1,prob = c(1-myr,myr)) == 1){
+    fsamples <- c(fsamples, mysamp)
+    mynum <- mynum + 1
+    mycount <- mycount +1
+}
+else{
+   mycount <- mycount +1
+}}
+
+#number of interation:
+print(mycount)
+
+
+```
+
+##3: Plot histograms of 1,000 samples from $Mg(x)$ and $f(x)$.  Use pastel colors with a low alpha (high level of transparency) in order to overlay the two distributions on the same plot.
+
+
+**Solution:**  
+```{r}
+hist(rnorm(1000),col = adjustcolor("green",alpha.f = .5),
+     xlab = "X",main="f function sampling")
+hist(fsamples,add =T,col = adjustcolor("red",alpha.f = .75))
+       
+
+
+
+```
+
+##4: Load the rousseeuw_outlier_set1.csv data set.  You are going to edit the code chunk below to create some interesting plots. For each bootstrap replication, record whether the first row of the data set has been chosen.  Then make two different plots of the regression lines:  one for all bootstrap samples with the first row and another for all bootstrap samples without the first row.  How many of the 1,000 bootstrap replications contain the first row?
+
+**Solution:**  
+```{r}
+set.seed(641)
+#R <- 1000
+#mybetas <- matrix(0,R,2)
+#for (j in c(1:R)){
+  ## sample indices to make bootstrap sample
+#  inds <- sample(c(1:nrow(outs)),size = nrow(outs),replace = T)
+  ## compute the regression
+#  res <- lm(Y ~ X, data = outs[inds,])
+  ## fill in the betas
+#  mybetas[j,] <- coef(res)
+#}
+
+#betas <- colMeans(mybetas)
+#mycols <- rainbow(R,alpha = .20)
+#plot(outs,typ="n",xlab="input",ylab="output",main = "Regression with Outliers")
+#points(outs,pch = 20, col="blue")
+#abline(myreg, col = "red")
+#for (j in c(1:R)){
+#  abline(a = mybetas[j,1], b = mybetas[j,2], col=mycols[j], lwd = .5)
+#}
+
+myData <- read.csv(file="rousseeuw_outlier_set1.csv",header = T)
+myData2 <- myData[-1,]
+R <- 1000
+myreg <- lm(Y ~ X, data = myData) 
+myreg2 <- lm(Y ~ X, data = myData2) 
+mybetas_1row <- matrix(0,R,2)
+mybetas_No1row <- matrix(0,R,2)
+for (j in c(1:R)){
+  inds <- sample(c(1:nrow(myData)),size = nrow(myData),replace = T)
+  res <- lm(Y ~ X, data = myData[inds,])
+  if (1 %in% inds){
+   mybetas_1row[j,] <- coef(res)
+  }
+  else{
+   mybetas_No1row[j,] <- coef(res) 
+  }
+}
+
+mycols <- rainbow(R,alpha = .20)
+plot(myData,typ="n",xlab="input",ylab="output",main = "Regression with Outliers(include row 1)" )
+points(myData,pch = 20, col="blue")
+abline(myreg, col = "red",lwd=4)
+for (j in c(1:R)){
+  abline(a = mybetas_1row[j,1], b = mybetas_1row[j,2], col=mycols[j], lwd = .5)
+}
+
+plot(myData,typ="n",xlab="input",ylab="output",main = "Regression with Outliers(not include row 1)" )
+points(myData,pch = 20, col="blue")
+abline(myreg2, col = "red",lwd = 4)
+for (j in c(1:R)){
+  abline(a = mybetas_No1row[j,1], b = mybetas_No1row[j,2], col=mycols[j], lwd = .5)
+}
+
+
+
+
+```
+
+
+* * *
