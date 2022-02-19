@@ -1,0 +1,357 @@
+---
+title: "Titanic Project"
+author: "Kay Du"
+date: "08/02/2022"
+output: html_document
+---
+
+
+
+```{r}
+# Import libraries
+
+#data wrangling
+library(tidyverse)
+
+#visualization
+library(ggplot2)
+library(visdat)   #handle missing value  
+library(naniar)   #handle missing value 
+library(corrplot)
+
+
+#modeling
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+```
+
+
+```{r}
+# Import data
+Train <- read.csv("Train.csv")
+Test <- read.csv("Test.csv")
+
+Test$Survived <- NA
+
+Train$set <- "Train"
+
+Test$set <- "Test"
+
+
+full <- rbind(Train, Test)
+
+```
+
+Data manupulation
+```{r}
+#extract individual's title from Name attribute
+names <- full$Name
+head(names)
+title <- gsub("^.*, ","",names)  #remove everything before ',' 
+title <- gsub("\\..*","",title)  #remove everything after '.'
+full$title <- title
+table(title)
+
+full$title[full$title == "Mlle"] <- "Miss"
+full$title[full$title == "Ms"] <- "Miss"
+full$title[full$title == "Lady"] <- "Miss"
+full$title[full$title == "Dona"] <- "Miss"
+full$title[full$title == "Mme"] <- "Mrs"
+
+
+full$title[full$title == "Major"] <- "Officer"
+full$title[full$title == "Col"] <- "Officer"
+full$title[full$title == "Capt"] <- "Officer"
+full$title[full$title == "Sir"] <- "Officer"
+full$title[full$title == "Dr"] <- "Noble"
+full$title[full$title == "Master"] <- "Noble"
+full$title[full$title == "Jonkheer"] <- "Noble"
+full$title[full$title == "Don"] <- "Noble"
+full$title[full$title == "the Countess"] <- "Noble"
+table(full$title)
+
+
+```
+
+Exploratory Analysis
+```{r}
+# check data format
+str(full)
+
+# check dataset dimensions
+dim(full)
+
+# number of unique values per column
+lapply(full, function(x) length(unique(x))) 
+
+
+```
+
+```{r}
+# check missing values
+full$Cabin[full$Cabin == ''] <- NA
+full$Embarked[full$Embarked==''] <- NA
+Train$Embarked[Train$Embarked==''] <- NA
+lapply(full, function(x) sum(is.na(x))) 
+
+vis_miss(full)    # create a heatmap of the missingness
+
+gg_miss_var(full)    # look at missing value in variables
+
+
+```
+
+```{r}
+#Set missing age as the mean age of all passengers
+avgAge <- mean(full$Age,na.rm = T)
+full <- full %>%
+  mutate(Age = ifelse(is.na(Age),avgAge, Age))
+
+#Remove missing Embarked 
+full[which(is.na(full$Embarked)),]
+
+full <- full %>%drop_na(Embarked)
+Train <- Train %>%drop_na(Embarked)
+
+
+
+```
+
+
+
+```{r}
+# survival rate
+
+full <- full %>%
+  mutate(Survived = case_when(Survived==1 ~ "Yes", Survived==0 ~ "No"))
+
+crude_summary <- full %>%
+  filter(set == "Train") %>%
+  select(PassengerId, Survived) %>%
+  group_by(Survived) %>%
+  summarise(n=n()) %>%
+  mutate(freq = n/sum(n))
+
+crude_summary
+
+crude_survivalRate <- crude_summary$freq[crude_summary$Survived == 'Yes']
+```
+
+
+Relationship Between Dependent and Independent Variables
+```{r}
+# Pclass:
+ggplot(full %>% filter(set == "Train"), aes(Pclass, fill=Survived)) +
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Class")
+
+# Sex:
+ggplot(full %>% filter(set == "Train"), aes(Sex, fill=Survived)) +
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Sex")
+
+# Title:
+ggplot(full %>% filter(set == "Train"), aes(title, fill=Survived)) +
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Title")
+
+# num of sibling 
+ggplot(full %>% filter(set == "Train"), aes(SibSp, fill=Survived)) +
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Num of Siblings")
+
+#Embarked
+ggplot(full %>%
+  filter(set == "Train" & !is.na(Embarked)),aes(Embarked,fill=Survived))+
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Embarked")
+
+# Parch
+ggplot(full %>%
+  filter(set == "Train" & !is.na(Parch)),aes(Parch,fill=Survived))+
+  geom_bar(position = "fill") +
+  scale_fill_brewer(palette = "Set3") +
+  ylab("Survival Rate") +
+  geom_hline(yintercept = crude_survivalRate,col="red")+
+  ggtitle("Survival Rate by Parch")
+
+# Age
+ggplot(full %>% filter(set == "Train"),aes(Age, fill=Survived))+
+  geom_histogram(aes(y=..density..), alpha = 0.5) +
+  geom_density(alpha=.2,aes(colour = Survived),lwd=1) +
+  scale_fill_brewer(palette="Set3")+
+  scale_colour_brewer(palette="Set3") +
+  ylab("Density")+
+  ggtitle("Survival Rate by Age")
+
+
+```
+
+Interactive Relationships Between Variables
+```{r}
+#Correlation Plot
+tbl_corr <- full %>%
+  filter(set=="Train") %>%
+  select(-PassengerId) %>%
+  select_if(is.numeric) %>%
+  cor(use="complete.obs") %>%
+  corrplot.mixed(tl.cex=0.85)
+
+```
+
+Prepare and keep data set
+```{r}
+#prepare and keep data in the proper format
+Train_set <- full[1:889, c("Pclass","title","Sex","Embarked")]
+response <- as.factor(Train$Survived)
+Train_set$Survived <- as.factor(Train$Survived)
+
+```
+
+
+```{r}
+#Keep 20% of data aside from my original Train set for cross validation purpose
+set.seed(500)
+ind<- createDataPartition(Train_set$Survived,times=1,p=0.8,list=F)
+
+Train_val <- Train_set[ind,]
+
+Test_val=Train_set[-ind,]
+
+#check the proportion of survival rate in original Training data, current Training and Testing data
+round(prop.table(table(Train$Survived)*100),digits = 1)
+
+round(prop.table(table(Train_val$Survived)*100),digits = 1)
+
+round(prop.table(table(Test_val$Survived)*100),digits = 1)
+```
+Predictive Analysis 
+
+
+Logistic Regression
+```{r}
+#Set values to factor
+Train_val1<- Train_val
+
+Train_val1$Sex<- as.factor(Train_val1$Sex)
+contrasts(Train_val1$Sex)
+Train_val1$Pclass<- as.factor(Train_val1$Pclass)
+contrasts(Train_val1$Pclass)
+Train_val1$title<- as.factor(Train_val1$title)
+contrasts(Train_val1$title)
+Train_val1$Embarked<- as.factor(Train_val1$Embarked)
+contrasts(Train_val1$Pclass)
+
+Test_val1 <- Test_val
+Test_val1$Sex<- as.factor(Test_val1$Sex)
+Test_val1$Pclass<- as.factor(Test_val1$Pclass)
+Test_val1$title<- as.factor(Test_val1$title)
+Test_val1$Embarked<- as.factor(Test_val1$Embarked)
+
+
+
+#build a logistic regression model
+logistic <- glm(Survived ~ ., data = Train_val1,family=binomial(link = "logit"))
+
+summary(logistic)
+
+confint(logistic)
+
+#predict Train data
+Train.probs <- predict(logistic,data=Train_val1, type = "response")
+table(Train_val1$Survived,Train.probs>0.5)
+
+#Logistic regression predicted Train data with accuracy rate
+(387+199)/(387+53+73+199)
+
+Test.probs <- predict(logistic, newdata=Test_val1,type =  "response")
+table(Test_val1$Survived,Test.probs>0.5)
+
+
+###Accuracy rate of Test data:
+(88+48)/(88+21+20+48)
+```
+
+Decision Tree
+```{r}
+#build a decision tree model:
+set.seed(800)
+decisionTree <- rpart(Survived~.,data=Train_val,method="class")
+rpart.plot(decisionTree,extra=3,fallen.leaves=T)
+
+#predict train data
+predict.DT <- predict(decisionTree,data=Train_val,type="class")
+confusionMatrix(predict.DT,Train_val$Survived)
+
+
+#model and test with 10 fold cross validation
+set.seed(801)
+cv_10 <- createMultiFolds(Train_val$Survived, k = 10, times = 10)
+ctrl <- trainControl(method = "repeatedcv", number = 10, 
+                     repeats = 10, index = cv_10)
+
+Train_val <- as.data.frame(Train_val)
+Model_CDT <- train(x = Train_val[,-5], y = Train_val[,5], 
+                   method = "rpart", tuneLength = 30, trControl = ctrl)
+
+rpart.plot(Model_CDT$finalModel,extra =  3,fallen.leaves = T)
+
+PRE_VDTS=predict(Model_CDT$finalModel,newdata=Test_val,type="class")
+confusionMatrix(PRE_VDTS,Test_val$Survived)
+
+```
+
+Random Forest
+```{r}
+#set values to factors
+col_names <- names(Train_val)
+Train_val[col_names] <- lapply(Train_val[col_names] , factor)
+Test_val[col_names] <- lapply(Test_val[col_names] , factor)
+
+set.seed(900)
+RForest <- randomForest(x = Train_val[,-5],y=Train_val[,5], 
+                        importance = TRUE, ntree = 500)
+RForest
+varImpPlot(RForest)
+
+# 10 fold cross validation
+set.seed(901)
+rf.cv_10 <- createMultiFolds(Train_val$Survived, k = 10, times = 10)
+rf.ctrl <- trainControl(method = "repeatedcv", number = 10, 
+                       repeats = 10,index = rf.cv_10)
+
+set.seed(901)
+rf<- train(x = Train_val[,-5], y = Train_val[,5], method = "rf", 
+           tuneLength = 3,ntree = 500, trControl =rf.ctrl)
+
+rf  #this show accuracy
+
+#predict the data
+levels(Test_val$Pclass) <- levels(Train_val$Pclass)
+levels(Test_val$title) <- levels(Train_val$title)
+levels(Test_val$Sex) <- levels(Train_val$Sex)
+levels(Test_val$Embarked) <- levels(Train_val$Embarked)
+levels(Test_val$Survived) <- levels(Train_val$Survived)
+
+PRE_RF <- predict(rf,newdata = Test_val)
+confusionMatrix(PRE_RF,Test_val$Survived)
+
+```
+
